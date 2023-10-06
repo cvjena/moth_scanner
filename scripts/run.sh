@@ -49,6 +49,12 @@ fi
 OPTS="${OPTS} --classifier ${CLASSIFIER}"
 OPTS="${OPTS} --detector ${DETECTOR}"
 
+if [[ -z $OUTPUT ]]; then
+	MODE=visualize
+else
+	MODE=extract
+	OPTS="${OPTS} --output ${OUTPUT}"
+fi
 
 ######################
 ### Adding submodules
@@ -65,7 +71,7 @@ if [[ $error != 0 ]]; then
 	exit $error
 fi
 
-${PYTHON} ${_home}/src/main.py \
+${PYTHON} ${_home}/src/main.py ${MODE} \
 	${DATA} \
 	${OPTS} \
 	$@

@@ -1,4 +1,5 @@
 from cvargparse import Arg
+from cvargparse import BaseParser
 from cvargparse import GPUParser
 
 try:
@@ -31,18 +32,34 @@ def add_model_args(parser: GPUParser):
     parser.add_args(_det_args, group_name="Detector arguments")
 
 def parse_args(*args, **kw):
+    main_parser = BaseParser()
 
-    parser = GPUParser([
+    _common_parser = GPUParser([
         Arg("data"),
-        Arg.int("--n_jobs", "-j", default=1),
+    ], add_help=False, nologging=True)
 
+    add_model_args(_common_parser)
+
+    subp = main_parser.add_subparsers(
+        title="Execution modes",
+        dest="mode",
+        required=True
+    )
+
+    parser = subp.add_parser("visualize",
+        help="Shows the outputs of the scanner",
+        parents=[_common_parser])
+
+    parser = subp.add_parser("extract",
+        help="Shows the outputs of the scanner",
+        parents=[_common_parser])
+
+    parser.add_args([
+        Arg("--output", "-out", required=True)
     ])
 
-    # add_dataset_args(parser)
-    add_model_args(parser)
 
-
-    return parser.parse_args(*args, **kw)
+    return main_parser.parse_args(*args, **kw)
 
 
 def load_yaml(path):

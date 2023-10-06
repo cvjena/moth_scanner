@@ -147,22 +147,61 @@ def classify(orig, bboxes, classifier):
 		x0, x1 = max(int(x0 - dw), 0), int(x0 - dw + size)
 		crop = orig[y0:y1, x0:x1]
 		X = model.prepare(crop, keep_ratio=False)[None]
-		pred = model(X)
+		pred = model(model.xp.array(X))
 
 		if isinstance(pred, tuple):
 			pred = pred[0]
+
+		pred.to_cpu()
 		pred = chainer.as_array(pred)
 
 		predictions.extend(pred.argmax(axis=1))
 
 	return predictions
 
+def show(orig, fname, bboxes, predictions, label_mapping):
+	fig, ax = plt.subplots()
+
+	ax.imshow(orig)
+	ax.set_title(fname)
+
+	for bbox, pred in zip(bboxes, predictions):
+		y0, x0, y1, x1 = bbox
+		w, h = x1 - x0, y1 - y0
+
+		ax.add_patch(plt.Rectangle((x0, y0), w, h, fill=False))
+
+		ax.text(x0, y0, label_mapping.get(pred, "NOT FOUND"),
+			va="bottom",
+			bbox=dict(facecolor='grey', alpha=0.5))
+
+	plt.show()
+	plt.close()
+
 
 def main(args):
+	if args.mode == "extract":
+		assert not Path(args.output).exists(), \
+			f"Destination already exists: {args.output}!"
 	data = Dataset(args.data)
+	GPU = args.gpu[0]
+	device = chainer.get_device(GPU)
+	if GPU >= 0:
+		GiB = 1024**3
+		chainer.backends.cuda.set_max_workspace_size(1 * GiB)
+
+	logging.info(f"Using {device!r:}")
+
+	device.use()
 
 	detector = load_detector(args)
 	classifier, label_mapping = load_classifier(args)
+
+	detector.to_device(device)
+	classifier.to_device(device)
+
+	results = []
+
 
 	for i, im in enumerate(tqdm(data)):
 		fname = data.images[i].relative_to(args.data)
@@ -171,27 +210,32 @@ def main(args):
 		bboxes = detect(orig, detector)
 		predictions = classify(orig, bboxes, classifier)
 
-		fig, ax = plt.subplots()
+		if args.mode == "visualize":
+			show(orig, fname, bboxes, predictions, label_mapping)
 
-		ax.imshow(orig)
-		ax.set_title(fname)
-
-		for bbox, pred in zip(bboxes, predictions):
-			y0, x0, y1, x1 = bbox
-			w, h = x1 - x0, y1 - y0
-
-			ax.add_patch(plt.Rectangle((x0, y0), w, h, fill=False))
-
-			ax.text(x0, y0, label_mapping.get(pred, "NOT FOUND"),
-				va="bottom",
-				bbox=dict(facecolor='grey', alpha=0.5))
-
-		plt.show()
-		plt.close()
+		results.append(
+			dict(
+				image=str(fname),
+				objects=[
+					dict(
+						x0=int(box[1]), y0=int(box[0]),
+						x1=int(box[3]), y1=int(box[2]),
+						prediction=int(pred)
+					) for box, pred in zip(bboxes, predictions)
+				]
+		))
 
 
+	if args.mode == "extract":
+		output = dict(
+			root=args.data,
+			classifier=args.classifier,
+			detector=args.detector,
+			results=results,
+			label_mapping=dict(label_mapping)
+		)
+		parser.dump_yaml(args.output, output)
 
-	# print(detector, classifier)
 
 chainer.config.cv_resize_backend = "cv2"
 with chainer.using_config("train", False), chainer.no_backprop_mode():
