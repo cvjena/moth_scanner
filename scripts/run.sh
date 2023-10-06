@@ -17,8 +17,8 @@ if [[ $error != 0 ]]; then
 	exit $error
 fi
 
-export PYTHONPATH="${PYTHONPATH}:${_home}/../moth_detector"
-export PYTHONPATH="${PYTHONPATH}:${_home}/../moth_classifier"
+export PYTHONPATH="${PYTHONPATH}:${_home}/src/modules/moth_detector"
+export PYTHONPATH="${PYTHONPATH}:${_home}/src/modules/moth_classifier"
 
 if [[ -z $DATA ]]; then
 	echo "Please set DATA variable!"
