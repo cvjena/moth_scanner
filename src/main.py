@@ -20,6 +20,7 @@ from scanner import parser
 try:
 	from moth_detector.core import models as det_models
 	from moth_detector.core import detectors
+	from moth_detector.core.dataset.bbox_dataset import BBoxDataset
 
 	from moth_classifier.core import classifier as clf_module
 except ImportError as e:
@@ -27,7 +28,24 @@ except ImportError as e:
 		"Consider setting the python path (PYTHONPATH) accordingly!")
 	raise
 
+def load_blob_detector(size=(1280, 1920)):
+	logging.info("Creating a blob detector")
+	model_cls = det_models.get("shallow")
+	model = model_cls(input_size=Size(size))
+
+	detector = detectors.shallow.Detector(
+		model=model,
+		nms_thresh=0.45,
+		score_thresh=0.1,
+		max_boxes=128
+	)
+
+	return detector
+
 def load_detector(args):
+	if args.detector == "blob_detector":
+		return load_blob_detector(), True
+
 	weights = Path(args.detector)
 	opts = parser.load_yaml(weights.parent / "meta/args.yml")
 
@@ -45,7 +63,7 @@ def load_detector(args):
 	detector = detector_cls(model=model, loss_func=multibox_loss, **detector_kwargs)
 	detector.load(weights, n_classes=None, strict=True, finetune=False)
 
-	return detector
+	return detector, False
 
 
 def infer_from_weights(weights, model, prefix="model"):
@@ -127,13 +145,21 @@ def project_back_bbox(bboxes, orig, X):
 
 	return bboxes
 
-def detect(orig, detector):
+def detect(orig, detector, *, is_blob_det: bool):
+	X = orig.transpose(2,0,1).astype(np.float32)
 	size = tuple(detector.model.input_size)
-	x = orig.transpose(2,0,1).astype(np.float32) / 255
-	X = tr.resize(x, size)
+
+	if not is_blob_det:
+		X = tr.resize(X, size)
+
+	X -= BBoxDataset.mean
 	_bboxes, _, _ = detector.predict(X[None], preset="visualize")
 
-	return tr.resize_bbox(_bboxes[0], size, orig.shape[:-1])
+	bboxes = _bboxes[0]
+	if len(bboxes) != 0:
+		return tr.resize_bbox(bboxes, X.shape[1:], orig.shape[:-1])
+	else:
+		return bboxes
 
 def classify(orig, bboxes, classifier):
 	predictions = []
@@ -194,7 +220,7 @@ def main(args):
 
 	device.use()
 
-	detector = load_detector(args)
+	detector, is_blob_det = load_detector(args)
 	classifier, label_mapping = load_classifier(args)
 
 	detector.to_device(device)
@@ -207,7 +233,7 @@ def main(args):
 		fname = data.images[i].relative_to(args.data)
 		orig = data_utils.asarray(im)
 
-		bboxes = detect(orig, detector)
+		bboxes = detect(orig, detector, is_blob_det=is_blob_det)
 		predictions = classify(orig, bboxes, classifier)
 
 		if args.mode == "visualize":

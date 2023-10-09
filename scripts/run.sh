@@ -41,7 +41,7 @@ if [[ ! -f ${CLASSIFIER} ]]; then
 fi
 
 
-if [[ ! -f ${DETECTOR} ]]; then
+if [[ ! -f ${DETECTOR} && ${DETECTOR} != "blob_detector" ]]; then
 	echo "Detector model is not present: ${DETECTOR}!"
 	error=3
 fi
@@ -60,6 +60,7 @@ fi
 ### Adding submodules
 ######################
 
+export PYTHONPATH="${PYTHONPATH}:${_home}/src/modules/blob_detector"
 export PYTHONPATH="${PYTHONPATH}:${_home}/src/modules/moth_detector"
 export PYTHONPATH="${PYTHONPATH}:${_home}/src/modules/moth_classifier"
 

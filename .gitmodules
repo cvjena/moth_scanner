@@ -4,3 +4,6 @@
 [submodule "src/modules/moth_detector"]
 	path = src/modules/moth_detector
 	url = git@github.com:cvjena/moth_detector.git
+[submodule "src/modules/blob_detector"]
+	path = src/modules/blob_detector
+	url = git@github.com:cvjena/blob_detector.git
